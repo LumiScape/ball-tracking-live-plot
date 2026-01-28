@@ -10,15 +10,39 @@ import numpy as np
 from ball_tracking.colormap import colormap_rainbow
 from ball_tracking.core import Point2D
 from ball_tracking.video_loop import VideoLoop
+from ball_tracking.thread_vid_writter import ThreadedVideoWriter
+import time
+
+def parse_video_source(value: str) -> Path | int:
+    # If the input is just digits, return it as an int
+    if value.isdigit():
+        return int(value)
+    # Otherwise, return it as a Path
+    return Path(value)
+
+def write_video(video_path: Path|int, video_loop) -> cv2.VideoWriter:
+    video_writer = None
+
+    if isinstance(video_path, Path):
+        filename = str(video_path.with_name(video_path.stem + "_tracked.mp4"))
+    else:
+        filename = "camera_output_tracked.mp4"
+
+    return ThreadedVideoWriter(
+        filename=filename,
+        fourcc=cv2.VideoWriter.fourcc(*"mp4v"),
+        fps=video_loop.fps,
+        frame_size=video_loop.video_resolution,
+    )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--video-path",
-        type=Path,
+        type=parse_video_source,
         default=Path("media/ball3.mp4"),
-        help="Path to the video file",
+        help="Path to the video or camera index",
     )
     parser.add_argument(
         "--alpha-blending",
@@ -61,9 +85,9 @@ def main() -> None:
     logger = logging.getLogger(__name__)
 
     args = parse_args()
-
     video_path = args.video_path
 
+    scale = 0.5
     with VideoLoop(
         video_path,
         loop=args.loop,
@@ -71,13 +95,8 @@ def main() -> None:
     ) as video_loop:
         logger.info(f"Loaded video: {video_path}, resolution: {video_loop.video_resolution}, fps: {video_loop.fps}")
 
-        if args.save_video:
-            video_writer = cv2.VideoWriter(
-                filename=str(video_path.with_name(video_path.stem + "_tracked.mp4")),
-                fourcc=cv2.VideoWriter.fourcc(*"mp4v"),
-                fps=video_loop.fps,
-                frameSize=video_loop.video_resolution,
-            )
+        if args.save_video :
+            video_writer = write_video(video_path=video_path, video_loop=video_loop)
         else:
             video_writer = None
 
@@ -89,13 +108,27 @@ def main() -> None:
         video_loop.reset()
         _, frame0 = next(video_loop)
         bg_sub.apply(frame0, learningRate=1.0)
+        
+        fps_frame_count = 0
+        fps_start_time = time.time()
+        current_fps = 0.0
 
         for wait_time, frame in video_loop:
-            frame_annotated = frame.copy()
+            if frame is None: continue
+            loop_start = time.perf_counter()
+
+            frame_annotated = frame.copy() # 1920 x 1080
+
+            # --- STEP 1: Downscale for logic ---
+            frame_small = cv2.resize(frame, (0, 0), fx=scale, fy=scale)
+
 
             # filter based on color
-            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            mask_color = cv2.inRange(hsv, np.array([30, 30, 30]), np.array([100, 150, 150]))
+            hsv = cv2.cvtColor(frame_small, cv2.COLOR_BGR2HSV)
+            lower_yellow = np.array([20, 60, 60])
+            upper_yellow = np.array([50, 255, 255])
+
+            mask_color = cv2.inRange(hsv, lower_yellow, upper_yellow)
             mask_color = cv2.morphologyEx(
                 mask_color,
                 cv2.MORPH_OPEN,
@@ -103,7 +136,7 @@ def main() -> None:
             )
 
             # filter based on motion
-            mask_fg = bg_sub.apply(frame, learningRate=0)
+            mask_fg = bg_sub.apply(frame_small, learningRate=0)
             mask_fg = cv2.dilate(
                 mask_fg,
                 kernel=cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
@@ -122,7 +155,8 @@ def main() -> None:
             if len(contours) > 0:
                 largest_contour = max(contours, key=cv2.contourArea)
                 x, y, w, h = cv2.boundingRect(largest_contour)
-                center = (x + w // 2, y + h // 2)
+                center_small = (x + w // 2, y + h // 2)
+                center = (int(center_small[0] / scale), int(center_small[1] / scale))
 
                 if len(tracked_pos) > 0:
                     # smooth the trajectory
@@ -137,6 +171,24 @@ def main() -> None:
 
                 cv2.circle(frame_annotated, center, 30, (255, 0, 0), 2)
                 cv2.circle(frame_annotated, center, 2, (255, 0, 0), 2)
+
+
+            # --- Update FPS Logic ---
+            fps_frame_count += 1
+            
+            # Every 30 frames, recalculate the "Instant" FPS
+            if fps_frame_count >= 30:
+                end_time = time.time()
+                current_fps = fps_frame_count / (end_time - fps_start_time)
+                
+                # Print stats
+                loop_end = time.perf_counter()
+                processing_ms = (loop_end - loop_start) * 1000
+                print(f"Tracking: {processing_ms:.2f}ms | Instant FPS: {current_fps:.1f}")
+                
+                # Reset window
+                fps_frame_count = 0
+                fps_start_time = time.time()
 
             # draw trajectory
             traj_len = len(tracked_pos)
@@ -163,14 +215,15 @@ def main() -> None:
 
             if video_writer is not None:
                 video_writer.write(frame_annotated)
-
-            cv2.imshow("Frame", frame_annotated)
+            preview = cv2.resize(frame_annotated, (1280, 720))
+            cv2.imshow("120 fps with 1920 x 1080", preview)
 
             if args.show_masks:
                 cv2.imshow("Mask FG", mask_fg)
                 cv2.imshow("Mask Color", mask_color)
 
-            key = cv2.waitKey(wait_time) & 0xFF
+            actual_wait = 1 if isinstance(video_path, int) else wait_time
+            key = cv2.waitKey(actual_wait) & 0xFF
             if key == ord("q"):
                 break
             if key == ord("r"):
