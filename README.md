@@ -15,11 +15,53 @@ This project uses [uv](https://docs.astral.sh/uv/getting-started/installation/) 
 
 ### Streaming Track Demo
 ```Shell
+# Using a video file (default)
 uv run tracking
+
+# Using an attached camera (camera index 0)
+uv run tracking --video-path 0
+
+# Using a specific video file
+uv run tracking --video-path media/ball3.mp4
 ```
+
 ### Trajectory Tracking
 ```Shell
+# Using a video file (default)
 uv run trajectory
+
+# Using an attached camera (camera index 0)
+uv run trajectory --video-path 0
+
+# Using a specific video file
+uv run trajectory --video-path media/ball.mp4
+```
+
+### Camera Options
+- Use `--video-path 0` for the default camera
+- Use `--video-path 1` for a secondary camera
+- Use `--camera-fps 60` to request a specific FPS (default: 120)
+- Camera settings like resolution are configured in the code (default: 1280x720)
+
+**Example with custom FPS:**
+```Shell
+uv run tracking --video-path 0 --camera-fps 60
+uv run trajectory --video-path 0 --camera-fps 30
+```
+
+### Stereo Camera Support (e.g., ELP 3D Stereo USB Camera)
+```Shell
+# Use only the left camera
+uv run tracking --video-path 0 --stereo --stereo-right 1 --stereo-use left
+
+# Use only the right camera
+uv run tracking --video-path 0 --stereo --stereo-right 1 --stereo-use right
+
+# Use both cameras side-by-side
+uv run tracking --video-path 0 --stereo --stereo-right 1 --stereo-use both
+
+# Trajectory with stereo
+uv run trajectory --video-path 0 --stereo --stereo-right 1 --stereo-use left --camera-fps 60
 ```
 
 ## 📈 Matplotlib + OpenCV

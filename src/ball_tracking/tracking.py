@@ -77,6 +77,30 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Save the video with the tracked ball",
     )
+    parser.add_argument(
+        "--camera-fps",
+        type=int,
+        default=120,
+        help="Requested FPS for camera (default: 120)",
+    )
+    parser.add_argument(
+        "--stereo",
+        action="store_true",
+        help="Enable stereo camera mode (e.g., for ELP 3D Stereo USB Camera)",
+    )
+    parser.add_argument(
+        "--stereo-right",
+        type=int,
+        default=None,
+        help="Camera index for right stereo camera (e.g., if left is 0, right is typically 1)",
+    )
+    parser.add_argument(
+        "--stereo-use",
+        type=str,
+        choices=["left", "right", "both"],
+        default="left",
+        help="Which camera(s) to use in stereo mode: 'left', 'right', or 'both' (side-by-side)",
+    )
     return parser.parse_args()
 
 
@@ -92,6 +116,10 @@ def main() -> None:
         video_path,
         loop=args.loop,
         skip_seconds=args.skip_seconds,
+        camera_fps=args.camera_fps,
+        stereo_mode=args.stereo,
+        stereo_camera_right=args.stereo_right,
+        stereo_use=args.stereo_use,
     ) as video_loop:
         logger.info(f"Loaded video: {video_path}, resolution: {video_loop.video_resolution}, fps: {video_loop.fps}")
 
