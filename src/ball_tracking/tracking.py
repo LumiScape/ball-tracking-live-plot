@@ -12,6 +12,18 @@ from ball_tracking.core import Point2D
 from ball_tracking.video_loop import VideoLoop
 from ball_tracking.thread_vid_writter import ThreadedVideoWriter
 import time
+import socket
+
+# Config
+UDP_IP = "127.0.0.1"
+UDD_PORT = 5000
+
+# Create Socket
+# AF_INET = IPv4, Sock_DGRAM = UDP
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+print(f"Sending to {UDP_IP}:{UDD_PORT}")
+
 
 def parse_video_source(value: str) -> Path | int:
     # If the input is just digits, return it as an int
@@ -194,7 +206,12 @@ def main() -> None:
                         int((1 - alpha) * prev_center[0] + alpha * center[0]),
                         int((1 - alpha) * prev_center[1] + alpha * center[1]),
                     )
+                # Format message -> Sennd strick
+                message = f"{center[0]},{center[1]}"
 
+
+                # Send data (.encode()=Bytes)
+                sock.sendto(message.encode('utf-8'), (UDP_IP, UDD_PORT))
                 tracked_pos.append(center)
 
                 cv2.circle(frame_annotated, center, 30, (255, 0, 0), 2)
@@ -262,7 +279,8 @@ def main() -> None:
 
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-
+    print("Stopping stream!")
+    sock.close()
 
 if __name__ == "__main__":
     main()
