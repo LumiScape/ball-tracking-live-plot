@@ -133,8 +133,8 @@ class VideoLoop:
 
             # 2 Apply specific Camera settings
             # 0.25 usually means 'Manual Mode' on Windows
-            #self.cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
-            #self.cap.set(cv2.CAP_PROP_EXPOSURE, -3)
+            self.cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
+            self.cap.set(cv2.CAP_PROP_EXPOSURE, -5)
             #self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
             #self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
             self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
